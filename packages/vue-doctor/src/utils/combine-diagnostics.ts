@@ -20,6 +20,9 @@ export const combineDiagnostics = (
 ): Diagnostic[] => {
     let all = [...oxlintDiagnostics, ...eslintVueDiagnostics, ...knipDiagnostics, ...customRulesDiagnostics];
 
+    // Filter out diagnostics with missing file paths (can happen with some parser errors)
+    all = all.filter((d) => typeof d.filePath === "string" && d.filePath.length > 0);
+
     // Normalize file paths to be relative
     all = all.map((d) => ({
         ...d,

@@ -157,6 +157,48 @@ console.log(result.diagnostics); // Array<Diagnostic>
 console.log(result.project);     // { framework: "nuxt3", vueVersion: "^3.4.0", ... }
 ```
 
+## Contributing
+
+Contributions are welcome! Here's how to get started:
+
+```bash
+# Clone the repo
+git clone https://github.com/healerlab/vue-doctor.git
+cd vue-doctor
+
+# Install dependencies
+pnpm install
+
+# Build
+pnpm run build
+
+# Run locally
+node packages/vue-doctor/dist/cli.mjs . --verbose
+
+# Run docs site
+pnpm run docs:dev
+```
+
+### Pull Request Guidelines
+
+- Fork the repo and create your branch from `main`
+- If you've added a new rule, add documentation in `docs/rules/`
+- Make sure the build passes (`pnpm run build`)
+- Keep PRs focused — one feature or fix per PR
+
+### Project Structure
+
+```
+vue-doctor/
+├── packages/vue-doctor/src/   # Core source code
+│   ├── cli.ts                 # CLI entry point
+│   ├── index.ts               # Public API
+│   └── utils/                 # Analysis engines & helpers
+├── docs/                      # VitePress documentation
+├── scripts/                   # Install scripts
+└── skills/                    # AI agent skill definitions
+```
+
 ## License
 
 [MIT](LICENSE) © [HealerLab](https://github.com/healerlab)

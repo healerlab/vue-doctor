@@ -128,7 +128,7 @@ const parseOxlintOutput = (stdout: string): Diagnostic[] => {
     }
 
     return output.diagnostics
-        .filter((d) => d.code)
+        .filter((d) => d.code && d.filename)
         .map((d) => {
             const { plugin, rule } = parseRuleCode(d.code);
             const primaryLabel = d.labels[0];

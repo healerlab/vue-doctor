@@ -1,6 +1,6 @@
 {
     "name": "@healerlab/vue-doctor",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "Diagnose and fix issues in your Vue.js app",
     "keywords": [
         "diagnostics",
