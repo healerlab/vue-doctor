@@ -1,0 +1,58 @@
+{
+    "name": "@healerlab/vue-doctor",
+    "version": "0.0.1",
+    "description": "Diagnose and fix issues in your Vue.js app",
+    "keywords": [
+        "diagnostics",
+        "linter",
+        "nuxt",
+        "performance",
+        "vue"
+    ],
+    "homepage": "https://healerlab.github.io/vue-doctor",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/healerlab/vue-doctor.git"
+    },
+    "license": "MIT",
+    "author": "HealerLab",
+    "bin": {
+        "vue-doctor": "./dist/cli.mjs"
+    },
+    "files": [
+        "dist"
+    ],
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/cli.d.mts",
+            "default": "./dist/cli.mjs"
+        },
+        "./api": {
+            "types": "./dist/index.d.mts",
+            "default": "./dist/index.mjs"
+        }
+    },
+    "scripts": {
+        "dev": "tsdown --watch",
+        "build": "rm -rf dist && NODE_ENV=production tsdown",
+        "typecheck": "tsc --noEmit",
+        "test": "pnpm build && vitest run"
+    },
+    "dependencies": {
+        "commander": "^14.0.0",
+        "eslint": "^9.0.0",
+        "eslint-plugin-vue": "^10.0.0",
+        "knip": "^5.83.0",
+        "ora": "^9.3.0",
+        "oxlint": "^1.47.0",
+        "picocolors": "^1.1.0",
+        "prompts": "^2.4.2",
+        "typescript": ">=5.0.4 <7"
+    },
+    "devDependencies": {
+        "@types/prompts": "^2.4.9",
+        "tsdown": "^0.20.3",
+        "vitest": "^3.0.0"
+    }
+}

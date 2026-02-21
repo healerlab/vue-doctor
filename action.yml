@@ -1,0 +1,100 @@
+name: Vue Doctor CI
+description: Run vue-doctor health check on your Vue.js project
+author: vue-doctor
+
+branding:
+  icon: heart
+  color: green
+
+inputs:
+  directory:
+    description: "Project directory to scan"
+    required: false
+    default: "."
+  diff:
+    description: "Enable diff mode — scan only changed files vs base branch"
+    required: false
+    default: "false"
+  diff-base:
+    description: "Base branch for diff comparison"
+    required: false
+    default: "main"
+  verbose:
+    description: "Show file details per rule"
+    required: false
+    default: "false"
+  fail-on-score:
+    description: "Fail the action if score is below this threshold (0-100)"
+    required: false
+    default: "0"
+  no-dead-code:
+    description: "Skip dead code detection"
+    required: false
+    default: "false"
+
+outputs:
+  score:
+    description: "Health score (0-100)"
+    value: ${{ steps.run.outputs.score }}
+  label:
+    description: "Score label (Great, Needs work, Critical)"
+    value: ${{ steps.run.outputs.label }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    - name: Install vue-doctor
+      shell: bash
+      run: npm install -g vue-doctor@latest
+
+    - name: Run vue-doctor
+      id: run
+      shell: bash
+      env:
+        INPUT_DIRECTORY: ${{ inputs.directory }}
+        INPUT_DIFF: ${{ inputs.diff }}
+        INPUT_DIFF_BASE: ${{ inputs.diff-base }}
+        INPUT_VERBOSE: ${{ inputs.verbose }}
+        INPUT_FAIL_ON_SCORE: ${{ inputs.fail-on-score }}
+        INPUT_NO_DEAD_CODE: ${{ inputs.no-dead-code }}
+      run: |
+        ARGS="${INPUT_DIRECTORY}"
+
+        if [ "${INPUT_DIFF}" = "true" ]; then
+          ARGS="${ARGS} --diff ${INPUT_DIFF_BASE}"
+        fi
+
+        if [ "${INPUT_VERBOSE}" = "true" ]; then
+          ARGS="${ARGS} --verbose"
+        fi
+
+        if [ "${INPUT_NO_DEAD_CODE}" = "true" ]; then
+          ARGS="${ARGS} --no-dead-code"
+        fi
+
+        # Run full report
+        vue-doctor ${ARGS} || true
+
+        # Capture score
+        SCORE=$(vue-doctor ${INPUT_DIRECTORY} --score 2>/dev/null || echo "0")
+        echo "score=${SCORE}" >> $GITHUB_OUTPUT
+
+        # Determine label
+        if [ "${SCORE}" -ge 80 ]; then
+          echo "label=Great" >> $GITHUB_OUTPUT
+        elif [ "${SCORE}" -ge 50 ]; then
+          echo "label=Needs work" >> $GITHUB_OUTPUT
+        else
+          echo "label=Critical" >> $GITHUB_OUTPUT
+        fi
+
+        # Check threshold
+        if [ "${INPUT_FAIL_ON_SCORE}" -gt 0 ] && [ "${SCORE}" -lt "${INPUT_FAIL_ON_SCORE}" ]; then
+          echo "::error::Vue Doctor score ${SCORE} is below threshold ${INPUT_FAIL_ON_SCORE}"
+          exit 1
+        fi
