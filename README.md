@@ -7,6 +7,11 @@
 
 One command scans your codebase for security, performance, correctness, and architecture issues, then outputs a **0–100 health score** with actionable diagnostics.
 
+## Demo
+
+<p align="center">
+  <img src="docs/public/demo.png" alt="Vue Doctor CLI output" width="600">
+</p>
 ## How it works
 
 Vue Doctor detects your framework (Nuxt, Vite, Vue CLI), Vue version, and project setup, then runs **four analysis engines in parallel**:
