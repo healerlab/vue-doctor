@@ -1,13 +1,16 @@
 # Rules Overview
 
-Vue Doctor runs **10 custom rules** in addition to oxlint, eslint-plugin-vue, and knip. These catch Vue-specific anti-patterns that general linters miss.
+Vue Doctor runs **14 custom rules** in addition to oxlint, eslint-plugin-vue, and knip. These catch Vue-specific anti-patterns that general linters miss.
 
 ## Categories
 
 | Category | Rules | Severity |
 |---|---|---|
 | [Reactivity](/rules/reactivity) | 3 rules | error / warning |
-| [Performance](/rules/performance) | 2 rules | warning |
+| [Performance](/rules/performance) | 3 rules | warning |
+| Accessibility | 1 rule | warning |
+| Security | 1 rule | warning |
+| Correctness | 1 rule | error |
 | [Nuxt](/rules/nuxt) | 2 rules | error / warning |
 | [Pinia](/rules/pinia) | 2 rules | warning |
 | [Architecture](/rules/architecture) | 1 rule | warning |
@@ -19,8 +22,12 @@ Vue Doctor runs **10 custom rules** in addition to oxlint, eslint-plugin-vue, an
 | `reactivity-destructure-props` | error | Reactivity |
 | `reactivity-reactive-reassign` | error | Reactivity |
 | `reactivity-ref-no-value` | warning | Reactivity |
+| `correctness-mutating-props` | error | Correctness |
 | `perf-giant-component` | warning | Performance |
 | `perf-v-for-method-call` | warning | Performance |
+| `perf-v-if-with-v-for` | warning | Performance |
+| `a11y-img-no-alt` | warning | Accessibility |
+| `security-v-html` | warning | Security |
 | `nuxt-fetch-in-mounted` | error | Nuxt |
 | `nuxt-no-navigate-to-in-setup` | warning | Nuxt |
 | `pinia-no-store-to-refs` | warning | Pinia |

@@ -189,6 +189,48 @@ const RULES: RuleDefinition[] = [
         message: "Method call inside v-for — this runs on every re-render",
         help: "Use a computed property instead of calling a method inside v-for",
     },
+    {
+        id: "vue-doctor/perf-v-if-with-v-for",
+        severity: "warning",
+        category: CATEGORIES.PERFORMANCE,
+        // Same element carries both v-for and v-if (in either order)
+        templatePattern: /<[^>]*\bv-for\s*=[^>]*\bv-if\s*=|<[^>]*\bv-if\s*=[^>]*\bv-for\s*=/,
+        message: "v-if on the same element as v-for — v-for has higher priority, so v-if re-evaluates on every iteration",
+        help: "Move v-if to a wrapper <template> tag, or pre-filter the list with a computed property",
+    },
+
+    // ---- Accessibility ----
+    {
+        id: "vue-doctor/a11y-img-no-alt",
+        severity: "warning",
+        category: CATEGORIES.ACCESSIBILITY,
+        // <img ...> with no alt attribute on the same line
+        templatePattern: /<img(?![^>]*\balt\s*=)[^>]*\/?>/,
+        message: "<img> is missing an alt attribute",
+        help: 'Add alt text (use alt="" for purely decorative images) so screen readers can describe the image',
+    },
+
+    // ---- Security ----
+    {
+        id: "vue-doctor/security-v-html",
+        severity: "warning",
+        category: CATEGORIES.SECURITY,
+        // Any use of v-html — renders raw HTML and can enable XSS
+        templatePattern: /\bv-html\s*=/,
+        message: "v-html renders raw HTML and can expose the app to XSS attacks",
+        help: "Avoid v-html with untrusted content; sanitize first (e.g. DOMPurify) or render text with {{ }} interpolation",
+    },
+
+    // ---- Correctness ----
+    {
+        id: "vue-doctor/correctness-mutating-props",
+        severity: "error",
+        category: CATEGORIES.CORRECTNESS,
+        // props.foo = ... / props.foo += ... but NOT comparisons (==, ===)
+        scriptPattern: /\bprops\.\w+\s*(?:[-+*/]?=)(?!=)/,
+        message: "Mutating a prop directly — props are read-only and the change is overwritten on the next re-render",
+        help: "Emit an event to the parent, or copy the prop into a local ref/computed, instead of mutating props.xxx",
+    },
 
     // ---- Nuxt-specific ----
     {

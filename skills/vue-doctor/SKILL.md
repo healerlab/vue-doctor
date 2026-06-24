@@ -1,79 +1,108 @@
 ---
 name: vue-doctor
-description: Run vue-doctor to diagnose and fix Vue.js project issues
+description: Diagnose and auto-fix Vue.js / Nuxt project issues — reactivity, performance, security, accessibility, Nuxt SSR, Pinia, and dead code. Use when checking, reviewing, or fixing a Vue codebase.
 ---
 
 # Vue Doctor Skill
 
-Use this skill to analyze Vue.js projects for health issues and auto-fix them.
+Diagnose Vue.js / Nuxt projects for health issues and auto-fix them. One command
+runs four engines in parallel (oxlint, eslint-plugin-vue, custom Vue rules, knip)
+and returns a 0–100 health score with actionable diagnostics.
 
 ## When to use
 
-- When the user asks to check a Vue/Nuxt project for issues
-- When reviewing Vue components for anti-patterns
-- When fixing linting or architecture issues in a Vue codebase
-- When the user says "run vue-doctor" or "check my Vue project"
+- The user asks to check, diagnose, audit, or fix a Vue/Nuxt project
+- Reviewing Vue components for anti-patterns before a commit or PR
+- Gating a build on code health in CI
+- The user says "run vue-doctor" or "check my Vue project"
 
-## How to run
+## Pick the right command
 
-### 1. Full scan
+| Goal | Command |
+|---|---|
+| **Auto-fix issues (agents — start here)** | `npx vue-doctor@latest . --json` |
+| Human-readable scan | `npx vue-doctor@latest . --verbose` |
+| Only changed files (fast PR check) | `npx vue-doctor@latest . --diff main --json` |
+| CI gate (fail under a threshold) | `npx vue-doctor@latest . --min-score 80` |
+| Score only | `npx vue-doctor@latest . --score` |
 
-```bash
-npx vue-doctor@latest . --verbose
+`--no-dead-code` and `--no-lint` skip those engines. `--diff` automatically skips
+dead-code analysis (it needs the whole project).
+
+## Auto-fix workflow (for AI / coding agents)
+
+**Always use `--json`** — it emits a stable, parseable document with no colors or
+spinner noise. Do not parse the human/`--fix` output.
+
+1. Run `npx vue-doctor@latest . --json` (add `--diff main` to scope to the PR).
+2. Parse the JSON. Each entry in `diagnostics[]` has:
+   `file`, `line`, `column`, `severity`, `category`, `rule`, `message`, `fix`.
+3. For each diagnostic, open `file` at `line:column`, apply the `fix` guidance
+   (see the rule table below), and edit the code.
+4. Fix `severity: "error"` items first, then `warning`.
+5. Re-run `--json` and confirm `score.value` went up and `summary.errors` dropped.
+
+### JSON shape
+
+```json
+{
+  "schema": "vue-doctor/diagnosis@1",
+  "score": { "value": 82, "label": "Great" },
+  "project": { "framework": "nuxt3", "vueVersion": "^3.4.0", "typescript": true },
+  "summary": { "total": 5, "errors": 1, "warnings": 4, "byCategory": { "Reactivity": 2 } },
+  "diagnostics": [
+    {
+      "file": "src/components/User.vue",
+      "line": 12, "column": 1,
+      "severity": "error",
+      "category": "Reactivity",
+      "rule": "vue-doctor/reactivity-destructure-props",
+      "message": "Destructuring props loses reactivity in Vue 3",
+      "fix": "Use toRefs(props) or access props.xxx directly"
+    }
+  ],
+  "diff": null,
+  "elapsedMs": 1240
+}
 ```
 
-### 2. Diff mode (only changed files)
+## Exit codes (CI / scripting)
+
+- `0` — completed (and, if `--min-score` was set, score met the threshold)
+- `1` — score below `--min-score`, or the scan failed (no Vue project, etc.)
 
 ```bash
-npx vue-doctor@latest . --diff main --verbose
+npx vue-doctor@latest . --min-score 80   # exits 1 if health < 80
 ```
 
-### 3. Fix mode (get structured diagnostics for auto-fixing)
+## Score interpretation
 
-```bash
-npx vue-doctor@latest . --fix
-```
+- **80–100 (Great):** healthy project, minor optimizations only
+- **50–79 (Needs work):** several issues to address
+- **0–49 (Critical):** major problems needing urgent attention
 
-### 4. Score only
+## Diagnostic categories
 
-```bash
-npx vue-doctor@latest . --score
-```
+Reactivity · Performance · Security · Correctness · Accessibility ·
+Architecture · Best Practices · Nuxt · Dead Code
 
-## Understanding the output
-
-### Score ranges
-- **80–100 (Great):** Project is healthy, minor optimizations only
-- **50–79 (Needs work):** Several issues to address
-- **0–49 (Critical):** Major problems that need urgent attention
-
-### Diagnostic categories
-- **Reactivity:** Props destructuring, reactive() reassignment, ref without .value
-- **Performance:** Giant components, v-for method calls
-- **Nuxt:** SSR anti-patterns (useFetch in onMounted, navigateTo without return)
-- **Best Practices:** Pinia direct mutations, mixed API styles
-- **Dead Code:** Unused files, exports, types, dependencies
-
-## Auto-fix workflow
-
-When the user asks to fix issues:
-
-1. Run vue-doctor with `--fix` flag to get structured diagnostics
-2. Read each diagnostic's file, rule, and suggested fix
-3. Apply fixes one by one, following the "Fix" guidance in each diagnostic
-4. Re-run vue-doctor to verify the score improved
-
-### Common fixes
+## Rule → fix reference
 
 | Rule | How to fix |
 |---|---|
 | `reactivity-destructure-props` | Use `toRefs(props)` or access `props.xxx` directly |
 | `reactivity-reactive-reassign` | Use `Object.assign(state, newData)` instead of `state = newData` |
-| `reactivity-ref-no-value` | Add `.value` when accessing refs in `<script>` |
-| `perf-giant-component` | Extract sub-components to reduce file size below 300 lines |
-| `nuxt-fetch-in-mounted` | Move `useFetch`/`useAsyncData` to top level of `<script setup>` |
+| `reactivity-ref-no-value` | Add `.value` when reading/writing refs in `<script>` |
 | `pinia-no-store-to-refs` | Wrap with `storeToRefs()`: `const { count } = storeToRefs(store)` |
 | `pinia-direct-state-mutation` | Use store actions or `$patch()` |
+| `correctness-mutating-props` | Emit an event to the parent, or copy the prop into local `ref`/`computed` |
+| `perf-giant-component` | Extract sub-components to get the file under 300 lines |
+| `perf-v-for-method-call` | Replace the in-template method call with a `computed` |
+| `perf-v-if-with-v-for` | Move `v-if` to a wrapper `<template>`, or pre-filter with a `computed` |
+| `a11y-img-no-alt` | Add an `alt` attribute (`alt=""` for decorative images) |
+| `security-v-html` | Sanitize HTML (e.g. DOMPurify) or use `{{ }}` interpolation |
+| `nuxt-fetch-in-mounted` | Move `useFetch`/`useAsyncData` to the top level of `<script setup>` |
+| `nuxt-no-navigate-to-in-setup` | `return navigateTo('/path')` from setup |
 | `arch-mixed-api-styles` | Migrate to Composition API with `<script setup>` |
 
 ## Node.js API
@@ -81,7 +110,7 @@ When the user asks to fix issues:
 For programmatic use in custom scripts:
 
 ```typescript
-import { diagnose } from "vue-doctor/api";
+import { diagnose } from "@healerlab/vue-doctor/api";
 
 const result = await diagnose("./path/to/vue-project");
 console.log(result.score);       // { score: 82, label: "Great" }
@@ -90,7 +119,7 @@ console.log(result.diagnostics); // Array<Diagnostic>
 
 ## Configuration
 
-The user can configure vue-doctor via `.vue-doctorrc` in their project root:
+Users can ignore rules/files via `.vue-doctorrc` in the project root:
 
 ```json
 {

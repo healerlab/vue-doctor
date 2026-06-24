@@ -26,7 +26,7 @@ SKILL_DIR_NAME="vue-doctor"
 
 SKILL_CONTENT='---
 name: vue-doctor
-description: Diagnose and fix Vue.js project issues — reactivity, performance, Nuxt, Pinia, dead code
+description: Diagnose and fix Vue.js / Nuxt issues — reactivity, performance, security, a11y, Nuxt SSR, Pinia, dead code
 ---
 
 # Vue Doctor Skill
@@ -35,62 +35,61 @@ Use this skill when the user asks to check, diagnose, or fix a Vue.js / Nuxt pro
 
 ## Commands
 
-### Full scan
-```bash
-npx vue-doctor@latest . --verbose
-```
+| Goal | Command |
+|---|---|
+| Auto-fix (agents start here) | npx vue-doctor@latest . --json |
+| Human-readable scan | npx vue-doctor@latest . --verbose |
+| Only changed files | npx vue-doctor@latest . --diff main --json |
+| CI gate (fail under threshold) | npx vue-doctor@latest . --min-score 80 |
+| Score only | npx vue-doctor@latest . --score |
 
-### Diff mode (only changed files)
-```bash
-npx vue-doctor@latest . --diff main --verbose
-```
+## Auto-fix workflow (AI / coding agents)
 
-### Fix mode (structured output for auto-fixing)
-```bash
-npx vue-doctor@latest . --fix
-```
+Always use --json. It is stable and parseable, with no colors or spinner noise.
+Do not parse the --fix or --verbose output.
 
-### Score only (for CI gates)
-```bash
-npx vue-doctor@latest . --score
-```
+1. Run: npx vue-doctor@latest . --json  (add --diff main to scope to the PR)
+2. Parse the JSON. Each diagnostics[] entry has:
+   file, line, column, severity, category, rule, message, fix.
+3. Open each file at line:column and apply the "fix" guidance.
+4. Fix severity "error" items first, then "warning".
+5. Re-run --json and confirm score.value rose and summary.errors dropped.
 
-## Score Interpretation
-- **80–100 (Great):** Healthy project
-- **50–79 (Needs work):** Issues to address
-- **0–49 (Critical):** Urgent attention needed
+## Exit codes
+- 0: completed (and score met --min-score if set)
+- 1: score below --min-score, or the scan failed
 
-## Auto-fix Workflow
+## Score: 80-100 Great | 50-79 Needs work | 0-49 Critical
 
-1. Run `npx vue-doctor@latest . --fix` to get structured diagnostics
-2. For each diagnostic, read the file at the given location
-3. Apply the suggested fix from the "Fix" field
-4. Re-run to verify the score improved
-
-## Common Fixes
+## Rule reference
 
 | Rule | Fix |
 |---|---|
-| `reactivity-destructure-props` | Use `toRefs(props)` or access `props.xxx` directly |
-| `reactivity-reactive-reassign` | Use `Object.assign(state, newData)` |
-| `reactivity-ref-no-value` | Add `.value` in `<script>` |
-| `perf-giant-component` | Split into sub-components (<300 lines) |
-| `nuxt-fetch-in-mounted` | Move `useFetch` to top level of `<script setup>` |
-| `pinia-no-store-to-refs` | Use `storeToRefs(store)` |
-| `pinia-direct-state-mutation` | Use actions or `$patch()` |
-| `arch-mixed-api-styles` | Migrate to `<script setup>` |
+| reactivity-destructure-props | Use toRefs(props) or access props.xxx directly |
+| reactivity-reactive-reassign | Use Object.assign(state, newData) |
+| reactivity-ref-no-value | Add .value in script |
+| pinia-no-store-to-refs | Use storeToRefs(store) |
+| pinia-direct-state-mutation | Use actions or $patch() |
+| correctness-mutating-props | Emit an event, or copy the prop into a local ref/computed |
+| perf-giant-component | Split into sub-components (<300 lines) |
+| perf-v-for-method-call | Replace the in-template call with a computed |
+| perf-v-if-with-v-for | Move v-if to a wrapper template, or pre-filter with a computed |
+| a11y-img-no-alt | Add an alt attribute (alt="" for decorative images) |
+| security-v-html | Sanitize HTML (DOMPurify) or use text interpolation |
+| nuxt-fetch-in-mounted | Move useFetch to top level of script setup |
+| nuxt-no-navigate-to-in-setup | return navigateTo("/path") |
+| arch-mixed-api-styles | Migrate to script setup |
 
 ## Configuration
 
-Users can ignore rules via `.vue-doctorrc`:
-```json
-{
-  "ignore": {
-    "rules": ["vue/no-v-html"],
-    "files": ["src/generated/**"]
-  }
-}
-```
+Ignore rules/files via .vue-doctorrc in the project root:
+
+    {
+      "ignore": {
+        "rules": ["vue/no-v-html"],
+        "files": ["src/generated/**"]
+      }
+    }
 '
 
 # ============================================================

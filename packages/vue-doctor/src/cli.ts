@@ -12,11 +12,84 @@ import {
     formatDiagnosticsVerbose,
     formatScore,
     formatScoreOnly,
+    formatJsonOutput,
 } from "./utils/format-output.js";
 import { discoverProject } from "./utils/discover-project.js";
 
 // Read version from package.json at build time
 const VERSION = "0.0.1";
+
+// ---------------------------------------------------------------------------
+// Skill markdown installed into coding agents (kept backtick/apostrophe-free
+// so the same text is safe to embed in scripts/install-skill.sh too).
+// ---------------------------------------------------------------------------
+const SKILL_MARKDOWN = `---
+name: vue-doctor
+description: Diagnose and fix Vue.js / Nuxt issues — reactivity, performance, security, a11y, Nuxt SSR, Pinia, dead code
+---
+
+# Vue Doctor Skill
+
+Use this skill when the user asks to check, diagnose, or fix a Vue.js / Nuxt project.
+
+## Commands
+
+| Goal | Command |
+|---|---|
+| Auto-fix (agents start here) | npx vue-doctor@latest . --json |
+| Human-readable scan | npx vue-doctor@latest . --verbose |
+| Only changed files | npx vue-doctor@latest . --diff main --json |
+| CI gate (fail under threshold) | npx vue-doctor@latest . --min-score 80 |
+| Score only | npx vue-doctor@latest . --score |
+
+## Auto-fix workflow (AI / coding agents)
+
+Always use --json. It is stable and parseable, with no colors or spinner noise.
+Do not parse the --fix or --verbose output.
+
+1. Run: npx vue-doctor@latest . --json  (add --diff main to scope to the PR)
+2. Parse the JSON. Each diagnostics[] entry has:
+   file, line, column, severity, category, rule, message, fix.
+3. Open each file at line:column and apply the "fix" guidance.
+4. Fix severity "error" items first, then "warning".
+5. Re-run --json and confirm score.value rose and summary.errors dropped.
+
+## Exit codes
+- 0: completed (and score met --min-score if set)
+- 1: score below --min-score, or the scan failed
+
+## Score: 80-100 Great | 50-79 Needs work | 0-49 Critical
+
+## Rule reference
+
+| Rule | Fix |
+|---|---|
+| reactivity-destructure-props | Use toRefs(props) or access props.xxx directly |
+| reactivity-reactive-reassign | Use Object.assign(state, newData) |
+| reactivity-ref-no-value | Add .value in script |
+| pinia-no-store-to-refs | Use storeToRefs(store) |
+| pinia-direct-state-mutation | Use actions or $patch() |
+| correctness-mutating-props | Emit an event, or copy the prop into a local ref/computed |
+| perf-giant-component | Split into sub-components (<300 lines) |
+| perf-v-for-method-call | Replace the in-template call with a computed |
+| perf-v-if-with-v-for | Move v-if to a wrapper template, or pre-filter with a computed |
+| a11y-img-no-alt | Add an alt attribute (alt="" for decorative images) |
+| security-v-html | Sanitize HTML (DOMPurify) or use text interpolation |
+| nuxt-fetch-in-mounted | Move useFetch to top level of script setup |
+| nuxt-no-navigate-to-in-setup | return navigateTo("/path") |
+| arch-mixed-api-styles | Migrate to script setup |
+
+## Configuration
+
+Ignore rules/files via .vue-doctorrc in the project root:
+
+    {
+      "ignore": {
+        "rules": ["vue/no-v-html"],
+        "files": ["src/generated/**"]
+      }
+    }
+`;
 
 const program = new Command();
 
@@ -31,6 +104,8 @@ program
     .option("--score", "output only the score")
     .option("--diff [base]", "scan only files changed vs base branch (default: main)")
     .option("--fix", "output diagnostics in a format suitable for AI agents to auto-fix")
+    .option("--json", "output the full diagnosis as JSON (for AI agents, coding agents, CI)")
+    .option("--min-score <number>", "exit with code 1 if the health score is below this threshold (CI gate)")
     .action(async (directory: string, options: {
         lint: boolean;
         deadCode: boolean;
@@ -38,7 +113,40 @@ program
         score: boolean;
         diff?: boolean | string;
         fix: boolean;
+        json: boolean;
+        minScore?: string;
     }) => {
+        const minScore = parseMinScore(options.minScore);
+
+        // JSON mode — pure machine-readable output, no spinner / colors
+        if (options.json) {
+            try {
+                const includePaths = resolveDiffPaths(directory, options.diff);
+                const result = await diagnose(directory, {
+                    lint: options.lint,
+                    deadCode: options.deadCode,
+                    includePaths,
+                });
+                console.log(formatJsonOutput({
+                    project: result.project,
+                    score: result.score,
+                    diagnostics: result.diagnostics,
+                    elapsedMilliseconds: result.elapsedMilliseconds,
+                    diff: includePaths
+                        ? { base: typeof options.diff === "string" ? options.diff : "main", fileCount: includePaths.length }
+                        : null,
+                }));
+                exitForScoreGate(result.score.score, minScore);
+            } catch (error) {
+                console.log(JSON.stringify({
+                    schema: "vue-doctor/diagnosis@1",
+                    error: error instanceof Error ? error.message : String(error),
+                }, null, 2));
+                process.exit(1);
+            }
+            return;
+        }
+
         // Score-only mode — minimal output
         if (options.score) {
             try {
@@ -49,6 +157,7 @@ program
                     includePaths,
                 });
                 console.log(formatScoreOnly(result.score));
+                exitForScoreGate(result.score.score, minScore);
             } catch (error) {
                 console.error(error instanceof Error ? error.message : String(error));
                 process.exit(1);
@@ -116,6 +225,11 @@ program
             const warningCount = result.diagnostics.filter((d) => d.severity === "warning").length;
             console.log(formatScore(result.score, errorCount, warningCount, result.elapsedMilliseconds));
 
+            if (minScore !== undefined && result.score.score < minScore) {
+                console.log(pc.red(`  ✖ Health score ${result.score.score} is below the required minimum of ${minScore}.\n`));
+            }
+            exitForScoreGate(result.score.score, minScore);
+
         } catch (error) {
             spinner.fail("Analysis failed");
             console.error(
@@ -128,6 +242,29 @@ program
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Parse the --min-score flag value into a number, or undefined if not set.
+ */
+const parseMinScore = (value?: string): number | undefined => {
+    if (value === undefined) return undefined;
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) {
+        console.error(pc.red(`Invalid --min-score value: "${value}" (expected a number 0–100)`));
+        process.exit(1);
+    }
+    return parsed;
+};
+
+/**
+ * Exit with code 1 when a CI score gate is set and the score falls below it.
+ * No-op when no gate is configured.
+ */
+const exitForScoreGate = (score: number, minScore?: number): void => {
+    if (minScore !== undefined && score < minScore) {
+        process.exit(1);
+    }
+};
 
 /**
  * Resolve --diff flag into file paths for diff-only scanning.
@@ -194,49 +331,7 @@ async function installSkill(): Promise<void> {
     const os = await import("node:os");
 
     const SKILL_DIR = "vue-doctor";
-    const SKILL_CONTENT = `---
-name: vue-doctor
-description: Diagnose and fix Vue.js project issues — reactivity, performance, Nuxt, Pinia, dead code
----
-
-# Vue Doctor Skill
-
-Use this skill when the user asks to check, diagnose, or fix a Vue.js / Nuxt project.
-
-## Commands
-
-### Full scan
-\`\`\`bash
-npx vue-doctor@latest . --verbose
-\`\`\`
-
-### Diff mode (only changed files)
-\`\`\`bash
-npx vue-doctor@latest . --diff main --verbose
-\`\`\`
-
-### Fix mode (structured output for auto-fixing)
-\`\`\`bash
-npx vue-doctor@latest . --fix
-\`\`\`
-
-## Score: 80–100 Great | 50–79 Needs work | 0–49 Critical
-
-## Auto-fix: Run with --fix, read each diagnostic, apply the Fix hint, re-run to verify.
-
-## Common Fixes
-
-| Rule | Fix |
-|---|---|
-| reactivity-destructure-props | Use toRefs(props) or access props.xxx directly |
-| reactivity-reactive-reassign | Use Object.assign(state, newData) |
-| reactivity-ref-no-value | Add .value in script |
-| perf-giant-component | Split into sub-components (<300 lines) |
-| nuxt-fetch-in-mounted | Move useFetch to top level of script setup |
-| pinia-no-store-to-refs | Use storeToRefs(store) |
-| pinia-direct-state-mutation | Use actions or $patch() |
-| arch-mixed-api-styles | Migrate to script setup |
-`;
+    const SKILL_CONTENT = SKILL_MARKDOWN;
 
     // Agent directories: [configDirName, displayName, isGlobal]
     interface AgentDir {

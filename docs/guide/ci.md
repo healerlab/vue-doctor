@@ -30,7 +30,15 @@ jobs:
 
 ## Score Gate
 
-Fail the build if the score drops below a threshold:
+Fail the build if the score drops below a threshold. The simplest way is the
+built-in `--min-score` flag, which exits with code `1` when the score is too low:
+
+```yaml
+- name: Check Score
+  run: npx @healerlab/vue-doctor@latest . --min-score 60
+```
+
+Or compute it yourself with `--score`:
 
 ```yaml
 - name: Check Score
@@ -41,6 +49,16 @@ Fail the build if the score drops below a threshold:
       echo "::error::Vue Doctor score $SCORE is below threshold 60"
       exit 1
     fi
+```
+
+## JSON output for tooling
+
+Use `--json` for a stable, machine-readable report you can pipe into other
+steps (annotations, dashboards, AI agents):
+
+```yaml
+- name: Diagnose
+  run: npx @healerlab/vue-doctor@latest . --json > vue-doctor.json
 ```
 
 ## PR Comment with Score

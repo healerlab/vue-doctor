@@ -150,3 +150,76 @@ export const formatScore = (
 export const formatScoreOnly = (score: ScoreResult): string => {
     return `${score.score}`;
 };
+
+// ---------------------------------------------------------------------------
+// Machine-readable output (--json) — for AI agents, coding agents, and CI
+// ---------------------------------------------------------------------------
+
+export interface JsonReportInput {
+    project: ProjectInfo;
+    score: ScoreResult;
+    diagnostics: Diagnostic[];
+    elapsedMilliseconds: number;
+    /** Diff-mode metadata, when scanning only changed files */
+    diff?: { base: string; fileCount: number } | null;
+}
+
+const countByCategory = (diagnostics: Diagnostic[]): Record<string, number> => {
+    const counts: Record<string, number> = {};
+    for (const d of diagnostics) {
+        counts[d.category] = (counts[d.category] ?? 0) + 1;
+    }
+    return counts;
+};
+
+/**
+ * Format the full diagnosis as a stable JSON document.
+ *
+ * This is the contract AI agents and CI pipelines should depend on:
+ * pure JSON on stdout, no ANSI colors, no spinner noise. The shape is
+ * intentionally flat and self-describing so an agent can read a diagnostic,
+ * open `file:line:column`, and apply `fix` without parsing prose.
+ */
+export const formatJsonOutput = (input: JsonReportInput): string => {
+    const errors = input.diagnostics.filter((d) => d.severity === "error").length;
+    const warnings = input.diagnostics.filter((d) => d.severity === "warning").length;
+
+    const report = {
+        schema: "vue-doctor/diagnosis@1",
+        score: {
+            value: input.score.score,
+            label: input.score.label,
+        },
+        project: {
+            framework: input.project.framework,
+            frameworkDisplayName: input.project.frameworkDisplayName,
+            vueVersion: input.project.vueVersion,
+            typescript: input.project.hasTypeScript,
+            pinia: input.project.hasPinia,
+            vuex: input.project.hasVuex,
+            vueRouter: input.project.hasVueRouter,
+            sourceFileCount: input.project.sourceFileCount,
+        },
+        summary: {
+            total: input.diagnostics.length,
+            errors,
+            warnings,
+            byCategory: countByCategory(input.diagnostics),
+        },
+        diagnostics: input.diagnostics.map((d) => ({
+            file: d.filePath,
+            line: d.line,
+            column: d.column,
+            severity: d.severity,
+            category: d.category,
+            plugin: d.plugin,
+            rule: d.rule,
+            message: d.message,
+            fix: d.help || null,
+        })),
+        diff: input.diff ?? null,
+        elapsedMs: Math.round(input.elapsedMilliseconds),
+    };
+
+    return JSON.stringify(report, null, 2);
+};
