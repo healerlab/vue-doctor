@@ -2,6 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@healerlab/vue-doctor.svg)](https://www.npmjs.com/package/@healerlab/vue-doctor)
 [![license](https://img.shields.io/npm/l/@healerlab/vue-doctor.svg)](https://github.com/healerlab/vue-doctor/blob/main/LICENSE)
+[![skills.sh](https://skills.sh/b/healerlab/vue-doctor)](https://www.skills.sh/healerlab/vue-doctor/vue-doctor)
 
 > 🩺 Diagnose and fix issues in your Vue.js app.
 
