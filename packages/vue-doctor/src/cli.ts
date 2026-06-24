@@ -2,6 +2,7 @@
 // CLI entry point — vue-doctor command
 // ============================================================
 
+import { createRequire } from "node:module";
 import { Command } from "commander";
 import ora from "ora";
 import pc from "picocolors";
@@ -16,8 +17,15 @@ import {
 } from "./utils/format-output.js";
 import { discoverProject } from "./utils/discover-project.js";
 
-// Read version from package.json at build time
-const VERSION = "0.0.1";
+// Resolve the real version from the shipped package.json (dist/ -> ../package.json)
+const require = createRequire(import.meta.url);
+const VERSION = (() => {
+    try {
+        return (require("../package.json") as { version: string }).version;
+    } catch {
+        return "0.0.0";
+    }
+})();
 
 // ---------------------------------------------------------------------------
 // Skill markdown installed into coding agents (kept backtick/apostrophe-free
